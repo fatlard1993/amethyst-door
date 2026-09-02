@@ -1,0 +1,94 @@
+package justfatlard.amethyst_door;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockSetType;
+import net.minecraft.world.phys.BlockHitResult;
+
+/**
+ * A door that does not open.
+ *
+ * <p>One block, two meanings, decided by which side of it you are standing on. Out in the world it
+ * is a way in, and stepping through writes down where you were standing. Inside a geode it is the
+ * way back to that spot - which is why the door you came in by can be mined while you are in
+ * there and you still come out somewhere sensible.
+ *
+ * <p>Still a real door in every other respect: two halves, a hinge, placed and broken the way a
+ * door is. Only the hand on the handle does something else.
+ */
+public class AmethystDoorBlock extends DoorBlock {
+	public AmethystDoorBlock(Properties settings) {
+		super(BlockSetType.STONE, settings);
+	}
+
+	@Override
+	protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+			Player player, BlockHitResult hit) {
+		if (!(level instanceof ServerLevel serverLevel)) return InteractionResult.SUCCESS;
+		if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
+
+		if (level.dimension().equals(Pocket.DIMENSION)) {
+			leave(serverLevel, serverPlayer);
+		} else {
+			enter(serverLevel, serverPlayer, pos);
+		}
+		return InteractionResult.SUCCESS;
+	}
+
+	/** In: remember the doorstep, build the geode if this is the first time, and go. */
+	private static void enter(ServerLevel level, ServerPlayer player, BlockPos door) {
+		ServerLevel pocket = Pocket.level(level.getServer());
+		if (pocket == null) {
+			player.sendSystemMessage(Component.translatable("amethyst-door-justfatlard.door.no_pocket"));
+			return;
+		}
+
+		PocketVault vault = PocketVault.get(level.getServer());
+		boolean first = !vault.hasPlot(player.getUUID());
+		int plot = vault.plotFor(player.getUUID());
+
+		vault.rememberDoorstep(player.getUUID(), new PocketVault.Doorstep(
+			level.dimension(), player.getX(), player.getY(), player.getZ(),
+			player.getYRot(), player.getXRot()));
+
+		if (first) Geode.build(pocket, plot);
+
+		knock(level, door);
+		BlockPos arrival = Pocket.arrivalIn(plot);
+		player.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
+			java.util.Set.<Relative>of(), 180F, 0F, true);
+	}
+
+	/** Out: back to the spot they were standing on, whatever has happened to the door since. */
+	private static void leave(ServerLevel level, ServerPlayer player) {
+		PocketVault.Doorstep doorstep = PocketVault.get(level.getServer()).doorstepOf(player.getUUID());
+
+		ServerLevel home = doorstep == null ? null : level.getServer().getLevel(doorstep.dimension());
+		if (home == null) {
+			// Nowhere recorded, or the world it named is gone. Spawn is the one place that always
+			// exists, and being put there beats being left in a sealed room.
+			home = level.getServer().overworld();
+			BlockPos spawn = home.getRespawnData().pos();
+			player.teleportTo(home, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5,
+				java.util.Set.<Relative>of(), 0F, 0F, true);
+			return;
+		}
+
+		player.teleportTo(home, doorstep.x(), doorstep.y(), doorstep.z(),
+			java.util.Set.<Relative>of(), doorstep.yaw(), doorstep.pitch(), true);
+	}
+
+	private static void knock(ServerLevel level, BlockPos pos) {
+		level.playSound(null, pos, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 0.8F, 1.0F);
+	}
+}

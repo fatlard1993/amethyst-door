@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "amethyst-door-justfatlard",
+  "version": "${version}",
+  "name": "Amethyst Door",
+  "description": "A door of amethyst, and behind it a geode of your own",
+  "authors": [
+    "justfatlard"
+  ],
+  "contact": {
+    "sources": "https://github.com/fatlard1993/amethyst-door"
+  },
+  "license": "MIT",
+  "icon": "assets/amethyst-door-justfatlard/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "justfatlard.amethyst_door.Main"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loaderVersion}",
+    "fabric-api": "${fabricApiVersion}",
+    "minecraft": "${minecraftDependency}",
+    "java": ">=25",
+    "pandorical": "*"
+  }
+}
