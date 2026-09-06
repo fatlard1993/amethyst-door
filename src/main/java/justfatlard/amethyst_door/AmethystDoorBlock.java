@@ -61,9 +61,32 @@ public class AmethystDoorBlock extends DoorBlock {
 			level.dimension(), player.getX(), player.getY(), player.getZ(),
 			player.getYRot(), player.getXRot()));
 
-		if (first) Geode.build(pocket, plot);
+		// Cut once, or cut again if the way out is not where it should be: a geode without its
+		// door is a geode somebody is going to be stuck in.
+		if (first || !Pocket.hasDoor(pocket, plot)) Geode.build(pocket, plot);
 
 		knock(level, door);
+		BlockPos arrival = Pocket.arrivalIn(plot);
+		player.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
+			java.util.Set.<Relative>of(), 180F, 0F, true);
+	}
+
+	/**
+	 * Somebody standing in the pocket whose geode has no way out.
+	 *
+	 * <p>Called as players load into the pocket. A geode cut by an earlier build had its floor,
+	 * door and doorstep outside the shell, and anyone who went through was left standing beside
+	 * their geode with no door to come back by. Cutting it again and moving them onto the floor
+	 * is how they get out, without anybody having to find them.
+	 */
+	public static void rescue(ServerLevel pocket, ServerPlayer player) {
+		PocketVault vault = PocketVault.get(pocket.getServer());
+		if (!vault.hasPlot(player.getUUID())) return;
+
+		int plot = vault.plotFor(player.getUUID());
+		if (Pocket.hasDoor(pocket, plot)) return;
+
+		Geode.build(pocket, plot);
 		BlockPos arrival = Pocket.arrivalIn(plot);
 		player.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
 			java.util.Set.<Relative>of(), 180F, 0F, true);

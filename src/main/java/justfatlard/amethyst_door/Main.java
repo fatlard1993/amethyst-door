@@ -13,8 +13,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.DoubleHighBlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 
@@ -34,7 +36,8 @@ public class Main implements ModInitializer {
 			.setId(AMETHYST_DOOR_KEY)
 	);
 
-	public static final BlockItem AMETHYST_DOOR_ITEM = new BlockItem(
+	/** Two-high like every vanilla door's item, so it clears the block above the way they do. */
+	public static final BlockItem AMETHYST_DOOR_ITEM = new DoubleHighBlockItem(
 		AMETHYST_DOOR,
 		new Item.Properties().setId(AMETHYST_DOOR_ITEM_KEY).useBlockDescriptionPrefix()
 	);
@@ -46,6 +49,11 @@ public class Main implements ModInitializer {
 				.baseBlock("minecraft:iron_door")
 				// A right-click travels rather than opens, so the client must not predict either.
 				.interactive()
+				// The base is an iron door for its shape and states, not its hardness: without
+				// these the client digs at the iron door's five-and-a-pickaxe while the server
+				// breaks it at this block's own, and the two disagree for the whole dig.
+				.strength(1.5F)
+				.requiresCorrectTool(false)
 				.model(MOD_ID + ":block/amethyst_door_bottom_left"));
 			PandoricalApi.content().registerItem(MOD_ID + ":amethyst_door", new ItemRegistration()
 				.model(MOD_ID + ":item/amethyst_door"));
@@ -60,19 +68,31 @@ public class Main implements ModInitializer {
 		// mining a hole into the void they cannot climb back out of.
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> {
 			if (!level.dimension().equals(Pocket.DIMENSION)) return true;
-			// The same bar the suite's admin tools use: somebody else's room is not your problem
-			// unless you are the one running the server.
-			if (player.permissions().hasPermission(
-					net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER)) return true;
+			// Creative is the one way through, for repairs. Being an op used to be another, and
+			// an op in survival found their own shell gave way under a pickaxe like anyone's
+			// furniture; the shell is meant to be the one thing in here that does not.
+			if (player.isCreative()) return true;
 
-			boolean theirs = !Pocket.isShell(pos) && !(state.getBlock() instanceof AmethystDoorBlock);
-			if (theirs) return true;
+			// What grows off the shell is the shell, cluster included: a harvestable cluster on a
+			// budding block that cannot be broken is a shard farm, and the geode is a room.
+			boolean shell = Pocket.isShell(pos) || state.getBlock() instanceof AmethystDoorBlock
+				|| state.is(Blocks.SMALL_AMETHYST_BUD) || state.is(Blocks.MEDIUM_AMETHYST_BUD)
+				|| state.is(Blocks.LARGE_AMETHYST_BUD) || state.is(Blocks.AMETHYST_CLUSTER);
+			if (!shell) return true;
 
 			if (player instanceof ServerPlayer told) {
 				told.sendSystemMessage(Component.translatable("amethyst-door-justfatlard.geode.solid"));
 			}
 			return false;
 		});
+
+		// Anyone loading into the pocket whose geode has lost its door gets it cut again and is
+		// stood on the floor. Cheap: a block read per player load in one dimension.
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register(
+			(entity, level) -> {
+				if (!level.dimension().equals(Pocket.DIMENSION)) return;
+				if (entity instanceof ServerPlayer player) AmethystDoorBlock.rescue(level, player);
+			});
 
 		System.out.println("[" + MOD_ID + "] Loaded (server-side with Pandorical)");
 	}

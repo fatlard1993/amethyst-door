@@ -21,12 +21,17 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 public final class Geode {
 	private Geode() {}
 
-	/** How far down the sphere the floor is laid. */
-	private static final int FLOOR_DROP = 5;
-
 	/** Roughly one in this many amethyst blocks comes up budding, for the look and the drops. */
 	private static final int BUDDING_IN = 14;
 
+	/**
+	 * Cut the geode, or cut it again.
+	 *
+	 * <p>Safe to run over an existing one: the shell and the floor are rewritten to what they
+	 * should be, and the hollow above the floor is left alone, so whatever the owner built in it
+	 * stays. It runs again only when the way out is found missing, which a working geode never
+	 * has.
+	 */
 	public static void build(ServerLevel level, int plot) {
 		BlockPos centre = Pocket.centreOf(plot);
 		RandomSource random = RandomSource.create(plot * 31L + 17L);
@@ -65,31 +70,53 @@ public final class Geode {
 		return null;
 	}
 
-	/** A flat amethyst floor across the bottom, so the room can actually be used. */
+	/**
+	 * A flat amethyst floor across the bottom, so the room can actually be used.
+	 *
+	 * <p>Solid from the floor down to the shell rather than a disc with a cavity under it, so the
+	 * bottom of the geode reads as one mass of crystal and there is nothing to fall through.
+	 */
 	private static void layFloor(ServerLevel level, BlockPos centre) {
-		int y = Pocket.FLOOR_Y;
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-
-		for (int x = -Pocket.INNER_RADIUS; x <= Pocket.INNER_RADIUS; x++) {
-			for (int z = -Pocket.INNER_RADIUS; z <= Pocket.INNER_RADIUS; z++) {
-				if (x * x + z * z > Pocket.INNER_RADIUS * Pocket.INNER_RADIUS) continue;
-
-				at.set(centre.getX() + x, y, centre.getZ() + z);
-				level.setBlock(at, Blocks.AMETHYST_BLOCK.defaultBlockState(), Block.UPDATE_CLIENTS);
-
-				// Clear whatever the sphere put in the space the floor now occupies
-				for (int above = 1; above <= FLOOR_DROP; above++) {
-					at.set(centre.getX() + x, y - above, centre.getZ() + z);
+		for (int y = centre.getY() - Pocket.INNER_RADIUS; y <= Pocket.FLOOR_Y; y++) {
+			for (int x = -Pocket.INNER_RADIUS; x <= Pocket.INNER_RADIUS; x++) {
+				for (int z = -Pocket.INNER_RADIUS; z <= Pocket.INNER_RADIUS; z++) {
+					at.set(centre.getX() + x, y, centre.getZ() + z);
 					if (Pocket.isShell(at)) continue;
-					level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+					level.setBlock(at, Blocks.AMETHYST_BLOCK.defaultBlockState(), Block.UPDATE_CLIENTS);
 				}
 			}
 		}
 	}
 
-	/** The way out, which is the same door and is never removable. */
+	/**
+	 * The way out, which is the same door and is never removable, set into a frame cut for it.
+	 *
+	 * <p>The sphere is not trusted to make a doorway on its own: where the door stands the wall
+	 * curves away, so the blocks either side, above and behind the door are laid as amethyst
+	 * whatever the shell arithmetic made of them, and the sill under it too. Then the door goes
+	 * in, and it is a door in a wall.
+	 */
 	private static void hangDoor(ServerLevel level, int plot) {
 		BlockPos bottom = Pocket.doorIn(plot);
+		BlockState frame = Blocks.AMETHYST_BLOCK.defaultBlockState();
+
+		for (BlockPos half : new BlockPos[] {bottom, bottom.above()}) {
+			level.setBlock(half.west(), frame, Block.UPDATE_CLIENTS);
+			level.setBlock(half.east(), frame, Block.UPDATE_CLIENTS);
+			level.setBlock(half.north(), frame, Block.UPDATE_CLIENTS);
+		}
+		level.setBlock(bottom.above(2), frame, Block.UPDATE_CLIENTS);
+		level.setBlock(bottom.below(), frame, Block.UPDATE_CLIENTS);
+
+		// An earlier build stood the door a block further into the room. A geode cut then still
+		// has it there, right in front of where the door goes now, so it is taken down first: a
+		// door in the doorway of a door is no way out.
+		for (BlockPos old : new BlockPos[] {bottom.south(), bottom.above().south()}) {
+			if (level.getBlockState(old).getBlock() instanceof AmethystDoorBlock) {
+				level.setBlock(old, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+			}
+		}
 
 		BlockState lower = Main.AMETHYST_DOOR.defaultBlockState()
 			.setValue(DoorBlock.FACING, Direction.NORTH)

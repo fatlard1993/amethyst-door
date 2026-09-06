@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": { "type": "minecraft:survives_explosion" },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:match_block",
+            "blocks": "amethyst-door-justfatlard:amethyst_door",
+            "state": { "half": "lower" }
+          },
+          "name": "amethyst-door-justfatlard:amethyst_door"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "amethyst-door-justfatlard:blocks/amethyst_door"
+}
