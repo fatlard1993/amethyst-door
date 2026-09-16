@@ -11,6 +11,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.DoubleHighBlockItem;
@@ -75,7 +76,8 @@ public class Main implements ModInitializer {
 
 			// What grows off the shell is the shell, cluster included: a harvestable cluster on a
 			// budding block that cannot be broken is a shard farm, and the geode is a room.
-			boolean shell = Pocket.isShell(pos) || state.getBlock() instanceof AmethystDoorBlock
+			boolean shell = (level instanceof ServerLevel serverLevel && Pocket.isShell(serverLevel, pos))
+				|| state.getBlock() instanceof AmethystDoorBlock
 				|| state.is(Blocks.SMALL_AMETHYST_BUD) || state.is(Blocks.MEDIUM_AMETHYST_BUD)
 				|| state.is(Blocks.LARGE_AMETHYST_BUD) || state.is(Blocks.AMETHYST_CLUSTER);
 			if (!shell) return true;
@@ -94,6 +96,8 @@ public class Main implements ModInitializer {
 				if (entity instanceof ServerPlayer player) AmethystDoorBlock.rescue(level, player);
 			});
 
+		net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
+			(dispatcher, registry, environment) -> GeodeCommands.register(dispatcher));
 		System.out.println("[" + MOD_ID + "] Loaded (server-side with Pandorical)");
 	}
 }

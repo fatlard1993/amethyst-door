@@ -53,9 +53,44 @@ public class AmethystDoorBlock extends DoorBlock {
 			return;
 		}
 
+		knock(level, door);
+		goIn(level, pocket, player);
+	}
+
+	/**
+	 * Into the player's own geode from wherever they are standing, as if through a door there:
+	 * the way out inside leads back to this spot. For another mod that offers the trip.
+	 *
+	 * <p>Only to a geode that exists. A geode is had by going through an amethyst door, and a
+	 * way in that made one would be a way round making the door.
+	 *
+	 * @return false when there is nowhere to go, having said why
+	 */
+	public static boolean visit(ServerPlayer player) {
+		ServerLevel level = player.level();
+		if (level.dimension().equals(Pocket.DIMENSION)) {
+			player.sendSystemMessage(Component.literal("You are already in the geodes."));
+			return false;
+		}
+		ServerLevel pocket = Pocket.level(level.getServer());
+		if (pocket == null) {
+			player.sendSystemMessage(Component.translatable("amethyst-door-justfatlard.door.no_pocket"));
+			return false;
+		}
+		if (!PocketVault.get(level.getServer()).hasPlot(player.getUUID())) {
+			player.sendSystemMessage(Component.literal("You have no geode yet. Go through an amethyst door first."));
+			return false;
+		}
+		goIn(level, pocket, player);
+		return true;
+	}
+
+	/** Remember the doorstep, build the geode if this is the first time or it lost its door, and go. */
+	private static void goIn(ServerLevel level, ServerLevel pocket, ServerPlayer player) {
 		PocketVault vault = PocketVault.get(level.getServer());
 		boolean first = !vault.hasPlot(player.getUUID());
-		int plot = vault.plotFor(player.getUUID());
+		vault.plotFor(player.getUUID());
+		Pocket.Site mine = Pocket.siteOf(vault, player.getUUID());
 
 		vault.rememberDoorstep(player.getUUID(), new PocketVault.Doorstep(
 			level.dimension(), player.getX(), player.getY(), player.getZ(),
@@ -63,12 +98,11 @@ public class AmethystDoorBlock extends DoorBlock {
 
 		// Cut once, or cut again if the way out is not where it should be: a geode without its
 		// door is a geode somebody is going to be stuck in.
-		if (first || !Pocket.hasDoor(pocket, plot)) Geode.build(pocket, plot);
+		if (first || !Pocket.hasDoor(pocket, mine)) Geode.build(pocket, Pocket.clusterOf(vault, player.getUUID()));
 
-		knock(level, door);
-		BlockPos arrival = Pocket.arrivalIn(plot);
+		BlockPos arrival = mine.arrival();
 		player.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
-			java.util.Set.<Relative>of(), 180F, 0F, true);
+			java.util.Set.<Relative>of(), mine.arrivalYaw(), 0F, true);
 	}
 
 	/**
@@ -83,13 +117,13 @@ public class AmethystDoorBlock extends DoorBlock {
 		PocketVault vault = PocketVault.get(pocket.getServer());
 		if (!vault.hasPlot(player.getUUID())) return;
 
-		int plot = vault.plotFor(player.getUUID());
-		if (Pocket.hasDoor(pocket, plot)) return;
+		Pocket.Site mine = Pocket.siteOf(vault, player.getUUID());
+		if (Pocket.hasDoor(pocket, mine)) return;
 
-		Geode.build(pocket, plot);
-		BlockPos arrival = Pocket.arrivalIn(plot);
+		Geode.build(pocket, Pocket.clusterOf(vault, player.getUUID()));
+		BlockPos arrival = mine.arrival();
 		player.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
-			java.util.Set.<Relative>of(), 180F, 0F, true);
+			java.util.Set.<Relative>of(), mine.arrivalYaw(), 0F, true);
 	}
 
 	/** Out: back to the spot they were standing on, whatever has happened to the door since. */

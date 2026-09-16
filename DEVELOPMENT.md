@@ -16,7 +16,8 @@ and `fabric.mod.json` (Java).
 | `AmethystDoorBlock.java` | A door that does not open |
 | `Pocket.java` | Where everybody's geode is |
 | `PocketVault.java` | Whose plot is whose, and the doorstep each of them stepped off |
-| `Geode.java` | Building somebody's geode, once |
+| `Geode.java` | Cutting a cluster of geodes, once or again; carrying a hollow across and mending its chests |
+| `GeodeCommands.java` | `/geode`: asking to grow into somebody else's geode, and the answers |
 
 ## Art
 
