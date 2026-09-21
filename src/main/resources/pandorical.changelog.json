@@ -1,0 +1,18 @@
+{
+  "overview": [
+    "Six amethyst blocks make a door. Open it and you are inside a hollow geode of your own that nobody else can reach, and the door on the far side puts you back exactly where you left."
+  ],
+  "versions": {
+    "1.1.1": [
+      "The ask to grow your geode into somebody else's now arrives as a prompt with Accept and Deny on it, instead of two lines of chat that the next thing anybody says pushes out of sight. Left alone it lapses and takes itself away.",
+      "An advancement for the first time you step through a door of your own."
+    ],
+    "1.1.0": [
+      "Geodes grow into one another. /geode join asks another player to share, their room is cut beside yours with a door of its own and their chests carried across intact, and the two hollows open where the crystal walls meet."
+    ],
+    "1.0.0": [
+      "A door of amethyst, and behind it a geode cut for you the first time you open one: basalt skin, calcite rind, amethyst you can see, some of it budding, and a crystal floor to stand a chest on.",
+      "Buds and clusters count as shell, so the room stays a room rather than a shard farm, and what it drops comes through the game's own loot tables."
+    ]
+  }
+}

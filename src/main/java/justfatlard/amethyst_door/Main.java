@@ -98,6 +98,9 @@ public class Main implements ModInitializer {
 
 		net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(
 			(dispatcher, registry, environment) -> GeodeCommands.register(dispatcher));
+		// Separate from the commands, which are registered per world load: the answer handler is
+		// registered once, and registering it again each time would stack copies of it.
+		GeodeCommands.listen();
 		System.out.println("[" + MOD_ID + "] Loaded (server-side with Pandorical)");
 	}
 }

@@ -8,15 +8,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import justfatlard.pandorical.api.NoticeApi;
+import justfatlard.pandorical.api.PandoricalApi;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
@@ -122,33 +122,66 @@ public final class GeodeCommands {
 			+ (members.size() > 1 ? " Everyone grown into that cluster has to agree." : "") + " If they do, that is for good.")
 			.withStyle(ChatFormatting.LIGHT_PURPLE));
 
-		Component accept = Component.literal("[Accept]").withStyle(style -> style
-			.withColor(ChatFormatting.GREEN).withBold(true)
-			.withClickEvent(new ClickEvent.RunCommand("/geode accept"))
-			.withHoverEvent(new HoverEvent.ShowText(Component.literal("Let " + who + "\'s geode grow into the cluster, for good"))));
-		Component deny = Component.literal("[Deny]").withStyle(style -> style
-			.withColor(ChatFormatting.RED).withBold(true)
-			.withClickEvent(new ClickEvent.RunCommand("/geode deny"))
-			.withHoverEvent(new HoverEvent.ShowText(Component.literal("Leave things as they are"))));
+		// Asked in the tray rather than in chat. This is consent for something that cannot be
+		// undone, put to everyone grown into the cluster at once, and it used to be two lines of
+		// coloured text that the next thing anybody said pushed out of sight.
 		for (ServerPlayer member : members) {
 			String onto = member == host ? "yours" : host.getGameProfile().name() + "\'s geode, in your cluster";
-			member.sendSystemMessage(Component.literal(who + " asks to grow their geode into " + onto + "."
-				+ (members.size() > 1 ? " Everyone in the cluster has to agree." : "")).withStyle(ChatFormatting.LIGHT_PURPLE));
-			member.sendSystemMessage(Component.literal("Crystal that has grown together does not come apart: this cannot be undone. ")
-				.withStyle(ChatFormatting.GRAY)
-				.append(accept).append(Component.literal("  ").withStyle(ChatFormatting.GRAY)).append(deny));
+			PandoricalApi.notices().offer(member, new NoticeApi.Notice(
+				askId(ask), NOTICE_KIND, "minecraft:amethyst_cluster",
+				who + " asks to grow their geode into " + onto + " - this cannot be undone"
+					+ (members.size() > 1 ? ", and everyone in the cluster has to agree" : ""),
+				List.of(new NoticeApi.Choice("accept", "minecraft:amethyst_shard", "Accept"),
+					new NoticeApi.Choice("deny", "minecraft:barrier", "Deny")),
+				(int) (ASK_TICKS / 20L)));
 		}
 		return 1;
 	}
 
-	private static void forget(Ask ask) {
+	public static final String NOTICE_KIND = "amethyst-door:grow";
+
+	/** One id for the whole ask, so every member answers the same question. */
+	private static String askId(Ask ask) {
+		return "grow-" + ask.asker;
+	}
+
+	/** Wired once, from the mod's own init. */
+	public static void listen() {
+		PandoricalApi.notices().onChoice(NOTICE_KIND, (player, noticeId, choiceId) -> {
+			try {
+				if ("accept".equals(choiceId)) accept(player);
+				else deny(player);
+			} catch (CommandSyntaxException e) {
+				fail(player, "That could not be done: " + e.getMessage());
+			}
+		});
+		// A lapsed ask is already refused by accept(); this only takes the question away, so nobody
+		// is left looking at an invitation that stopped meaning anything two minutes ago.
+		PandoricalApi.notices().onExpiry(NOTICE_KIND, (player, noticeId) -> {
+			Ask ask = asks.get(player.getUUID());
+			if (ask != null && askId(ask).equals(noticeId)) asks.remove(player.getUUID());
+		});
+	}
+
+	/**
+	 * The ask is over: drop it, and take the question off everyone still looking at it.
+	 *
+	 * @param here anybody in the ask, only to reach the server through
+	 */
+	private static void forget(ServerPlayer here, Ask ask) {
+		var players = here.level().getServer().getPlayerList();
+		for (UUID id : List.copyOf(asks.keySet())) {
+			if (asks.get(id) != ask) continue;
+			ServerPlayer told = players.getPlayer(id);
+			if (told != null) PandoricalApi.notices().withdraw(told, NOTICE_KIND, askId(ask));
+		}
 		asks.values().removeIf(other -> other == ask);
 	}
 
 	private static int deny(ServerPlayer member) {
 		Ask ask = asks.get(member.getUUID());
 		if (ask == null) return fail(member, "Nobody is asking.");
-		forget(ask);
+		forget(member, ask);
 		var players = member.level().getServer().getPlayerList();
 		ServerPlayer asker = players.getPlayer(ask.asker);
 		if (asker != null) asker.sendSystemMessage(Component.literal(member.getGameProfile().name() + " would rather not.").withStyle(ChatFormatting.GRAY));
@@ -164,13 +197,13 @@ public final class GeodeCommands {
 		Ask ask = asks.get(member.getUUID());
 		if (ask == null) return fail(member, "Nobody is asking.");
 		if (ask.until < member.level().getGameTime()) {
-			forget(ask);
+			forget(member, ask);
 			return fail(member, "That ask has lapsed.");
 		}
 		var players = member.level().getServer().getPlayerList();
 		ServerPlayer asker = players.getPlayer(ask.asker);
 		if (asker == null) {
-			forget(ask);
+			forget(member, ask);
 			return fail(member, "They have gone.");
 		}
 
@@ -206,7 +239,7 @@ public final class GeodeCommands {
 			return 0;
 		}
 		for (Ask ask : List.copyOf(asks.values())) {
-			if (ask.asker.equals(asker.getUUID())) forget(ask);
+			if (ask.asker.equals(asker.getUUID())) forget(asker, ask);
 		}
 		ServerPlayer told = source.getEntity() instanceof ServerPlayer op ? op : host;
 		int done = growInto(told, asker, host, vault.plotFor(host.getUUID()));

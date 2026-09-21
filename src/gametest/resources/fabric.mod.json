@@ -1,0 +1,18 @@
+{
+	"schemaVersion": 1,
+	"id": "amethyst-door-gametest",
+	"version": "1.0.0",
+	"name": "Amethyst Door smoke test",
+	"description": "Loads the mod, joins a world, and fails if anything on the way threw.",
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-client-gametest": [
+			"justfatlard.amethyst_door.gametest.SmokeTest"
+		]
+	},
+	"depends": {
+		"amethyst-door-justfatlard": "*",
+		"fabric-client-gametest-api-v1": "*"
+	}
+}
