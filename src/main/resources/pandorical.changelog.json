@@ -3,6 +3,9 @@
     "Six amethyst blocks make a door. Open it and you are inside a hollow geode of your own that nobody else can reach, and the door on the far side puts you back exactly where you left."
   ],
   "versions": {
+    "1.1.5": [
+      "When geodes grow together, what is carried across no longer lands on top of a neighbour's building or on somebody standing in the way. Anything with nowhere to go drops where it would have gone, contents and all."
+    ],
     "1.1.4": [
       "Geodes grown together open into each other every time. Some grew a half block too far apart to touch, so the friends inside could see each other's names through the crystal and never get through. Ops can bring one of those closer with /geode regrow, everything in it carried across."
     ],

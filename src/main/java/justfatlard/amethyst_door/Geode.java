@@ -160,7 +160,8 @@ public final class Geode {
 
 	/**
 	 * Carry everything in a hollow to another, block for block, chests and their contents with
-	 * it, and whatever was living or hanging in there. The old hollow is left bare.
+	 * it, and whatever was living or hanging in there. The old hollow is left bare. A block that
+	 * would land on a neighbour's building or on somebody standing there drops as items instead.
 	 *
 	 * <p>Read whole, then written, then cleared, with no shape updates anywhere in it. Done a
 	 * block at a time it took double chests apart: clearing one half told the other its partner
@@ -194,11 +195,14 @@ public final class Geode {
 		}
 		for (Carried piece : carried) {
 			BlockPos dst = to.offset(piece.offset());
-			level.setBlock(dst, piece.state(), quiet);
-			if (piece.kept() != null) {
-				BlockEntity moved = BlockEntity.loadStatic(dst, piece.state(), piece.kept(), level.registryAccess());
-				if (moved != null) level.setBlockEntity(moved);
+			BlockEntity moved = piece.kept() == null ? null
+				: BlockEntity.loadStatic(dst, piece.state(), piece.kept(), level.registryAccess());
+			if (inTheWay(level, dst, piece.state())) {
+				dropCarried(level, dst, piece.state(), moved);
+				continue;
 			}
+			level.setBlock(dst, piece.state(), quiet);
+			if (moved != null) level.setBlockEntity(moved);
 		}
 
 		AABB hollow = new AABB(from).inflate(r);
@@ -207,6 +211,28 @@ public final class Geode {
 			entity.teleportTo(level, entity.getX() + shift.getX(), entity.getY() + shift.getY(),
 				entity.getZ() + shift.getZ(), Set.of(), entity.getYRot(), entity.getXRot(), false);
 		}
+	}
+
+	/**
+	 * Whether a carried block would land on something: where the hollow it is carried into
+	 * overlaps a neighbour's room, that room's own building, or somebody standing in it. Shell
+	 * stone does not count, since the cutter clears it from any hollow anyway.
+	 */
+	private static boolean inTheWay(ServerLevel level, BlockPos dst, BlockState carried) {
+		BlockState there = level.getBlockState(dst);
+		if (!there.isAir() && !laid(there)) return true;
+		return !carried.getCollisionShape(level, dst).isEmpty()
+			&& !level.getEntitiesOfClass(Player.class, new AABB(dst)).isEmpty();
+	}
+
+	/** A carried block that had nowhere to land, dropped as items where it would have gone, contents and all. */
+	private static void dropCarried(ServerLevel level, BlockPos dst, BlockState state, BlockEntity kept) {
+		// A shulker box carries its contents inside its own item; anything else spills them.
+		if (kept instanceof net.minecraft.world.Container container
+				&& !(kept instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity)) {
+			net.minecraft.world.Containers.dropContents(level, dst, container);
+		}
+		Block.dropResources(state, level, dst, kept);
 	}
 
 	/**
