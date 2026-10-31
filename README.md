@@ -32,6 +32,7 @@ A cluster is a community: everyone already grown into it has to accept the newco
 | `/geode who` | anyone | Whose geodes yours is grown together with |
 | `/geode mend` | anyone | Put back together any double chest in your cluster that came apart |
 | `/geode force <geode> <onto>` | ops | Grow one player's geode into another's without asking anybody, for when somebody in a cluster cannot be reached to answer |
+| `/geode regrow <player>` | ops | Grow a geode that an earlier build left too far out to open into its cluster again, closer in, everything in it carried across |
 
 ## One Dimension, Not One Each
 

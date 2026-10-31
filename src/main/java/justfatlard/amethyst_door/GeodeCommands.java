@@ -85,7 +85,11 @@ public final class GeodeCommands {
 				.then(Commands.argument("geode", EntityArgument.player())
 					.then(Commands.argument("onto", EntityArgument.player())
 						.executes(context -> force(context.getSource(),
-							EntityArgument.getPlayer(context, "geode"), EntityArgument.getPlayer(context, "onto")))))));
+							EntityArgument.getPlayer(context, "geode"), EntityArgument.getPlayer(context, "onto"))))))
+			.then(Commands.literal("regrow")
+				.requires(source -> Commands.LEVEL_GAMEMASTERS.check(source.permissions()))
+				.then(Commands.argument("geode", EntityArgument.player())
+					.executes(context -> regrow(context.getSource(), EntityArgument.getPlayer(context, "geode"))))));
 	}
 
 	private static int ask(ServerPlayer asker, ServerPlayer host) {
@@ -248,6 +252,61 @@ public final class GeodeCommands {
 		return done;
 	}
 
+	/**
+	 * An op grows a geode again, closer in, onto the nearest geode in its cluster. For one an
+	 * earlier build grew too far out to open into anything: its owner could see the others' names
+	 * through the crystal and never reach them.
+	 */
+	private static int regrow(CommandSourceStack source, ServerPlayer owner) {
+		ServerLevel pocket = Pocket.level(source.getServer());
+		PocketVault vault = PocketVault.get(source.getServer());
+		String name = owner.getGameProfile().name();
+		String refused = pocket == null ? "The geode dimension is not loaded."
+			: !vault.hasPlot(owner.getUUID()) ? name + " has no geode yet."
+			: vault.isFirst(owner.getUUID()) ? name + "'s geode is the one its cluster grew onto; it stays where it is."
+			: null;
+		if (refused != null) {
+			source.sendFailure(Component.literal(refused));
+			return 0;
+		}
+
+		int plot = vault.plotFor(owner.getUUID());
+		Pocket.Site was = Pocket.siteOf(vault, owner.getUUID());
+		List<Pocket.Site> others = new ArrayList<>(Pocket.clusterOf(vault, plot));
+		others.removeIf(site -> site.owner().equals(owner.getUUID()));
+		// Only a geode nothing opens into is stuck; moving one that does would close its windows.
+		if (others.stream().anyMatch(site -> site.distance(was.centre()) < 2 * Pocket.INNER_RADIUS - 1)) {
+			source.sendFailure(Component.literal(name + "'s geode already opens into the cluster."));
+			return 0;
+		}
+		Pocket.Site onto = others.stream().min(java.util.Comparator.comparingDouble(site -> site.distance(was.centre()))).orElseThrow();
+		BlockPos centre = grow(others, onto, RandomSource.create());
+		if (centre == null) {
+			source.sendFailure(Component.literal("There is no room left on that cluster for it to grow."));
+			return 0;
+		}
+
+		vault.settle(owner.getUUID(), plot, centre.subtract(Pocket.centreOf(plot)), awayFrom(onto.centre(), centre));
+		List<Pocket.Site> grown = Pocket.clusterOf(vault, plot);
+		// Carried before anything is cut: the old sphere and the new overlap, and cutting the new
+		// shell first would cut it straight through the room on its way across.
+		Geode.moveHollow(pocket, was.centre(), centre);
+		Geode.clearStale(pocket, was, grown);
+		Geode.build(pocket, grown);
+
+		if (owner.level().dimension().equals(Pocket.DIMENSION)) {
+			Pocket.Site now = Pocket.siteOf(vault, owner.getUUID());
+			BlockPos arrival = now.arrival();
+			owner.teleportTo(pocket, arrival.getX() + 0.5, arrival.getY(), arrival.getZ() + 0.5,
+				java.util.Set.<Relative>of(), now.arrivalYaw(), 0F, true);
+		}
+		pocket.playSound(null, centre, net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME,
+			net.minecraft.sounds.SoundSource.BLOCKS, 1.0F, 0.6F);
+		owner.sendSystemMessage(Component.literal("Your geode has grown closer in. The way through is where the crystal opens.").withStyle(ChatFormatting.LIGHT_PURPLE));
+		source.sendSuccess(() -> Component.literal("Regrew " + name + "'s geode."), true);
+		return 1;
+	}
+
 	/** The growing itself, once everyone who had to agree has, or an op has said so. */
 	private static int growInto(ServerPlayer told, ServerPlayer asker, ServerPlayer host, int plot) {
 		ServerLevel pocket = Pocket.level(told.level().getServer());
@@ -323,12 +382,16 @@ public final class GeodeCommands {
 		return 1;
 	}
 
+	/** The furthest apart two grown geodes stand and still open a window a player walks through. */
+	private static final double MAX_APART = 2 * Pocket.INNER_RADIUS - 2.5;
+
 	/**
 	 * Where a new geode grows onto this one.
 	 *
-	 * <p>Close enough that the two hollows share a window - centres seventeen apart, give or
-	 * take, against an inner radius of nine - at a bearing of its own and a few blocks up or
-	 * down, so the cluster comes out as crystals do and not as beads on a string. Tried at random
+	 * <p>Close enough that the two hollows share a window a player fits through - each hollow
+	 * reaches eight and a half from its middle, so centres seventeen apart only touch, and
+	 * fourteen to fifteen and a half apart open a round window three to five blocks across - at
+	 * a bearing of its own and a few blocks up or down, so the cluster comes out as crystals do and not as beads on a string. Tried at random
 	 * until one fits: it may lean on the geode it grows onto and touch the others, but not grow
 	 * into any of them, or their rooms would open too.
 	 */
@@ -336,11 +399,13 @@ public final class GeodeCommands {
 		for (int attempt = 0; attempt < 96; attempt++) {
 			double bearing = random.nextDouble() * Math.PI * 2.0;
 			int rise = random.nextInt(9) - 4;
-			double apart = 16.0 + random.nextDouble() * 2.0;
+			double apart = 14.0 + random.nextDouble() * 1.5;
 			double flat = Math.sqrt(Math.max(1.0, apart * apart - rise * rise));
 			BlockPos centre = onto.centre().offset(
 				(int) Math.round(Math.cos(bearing) * flat), rise, (int) Math.round(Math.sin(bearing) * flat));
 			if (Math.abs(centre.getY() - Pocket.CENTRE_Y) > 12) continue;
+			// Rounding to the block can carry it out past where the window still opens.
+			if (onto.distance(centre) > MAX_APART) continue;
 			// The door goes in the wall facing away from what it grows onto, and that wall has to
 			// be clear of every other geode in the cluster, or the way out would be cut into
 			// somebody's shell.

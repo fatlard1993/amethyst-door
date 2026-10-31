@@ -142,6 +142,23 @@ public final class Geode {
 	}
 
 	/**
+	 * Take down what is left of a geode that has been cut again nearby: stone the cutter laid,
+	 * and the old door, wherever no geode of the cluster wants shell now. Left standing, the old
+	 * sphere's far side hangs on in the empty with a door in it that leads nowhere.
+	 */
+	public static void clearStale(ServerLevel level, Pocket.Site was, List<Pocket.Site> cluster) {
+		int reach = Pocket.OUTER_RADIUS + 1;
+		BlockPos centre = was.centre();
+		for (BlockPos at : BlockPos.betweenClosed(centre.offset(-reach, -reach, -reach), centre.offset(reach, reach, reach))) {
+			if (cluster.stream().anyMatch(site -> site.insideShell(at))) continue;
+			BlockState have = level.getBlockState(at);
+			if (laid(have) || have.getBlock() instanceof AmethystDoorBlock) {
+				level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+			}
+		}
+	}
+
+	/**
 	 * Carry everything in a hollow to another, block for block, chests and their contents with
 	 * it, and whatever was living or hanging in there. The old hollow is left bare.
 	 *
