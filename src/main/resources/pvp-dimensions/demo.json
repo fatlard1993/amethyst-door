@@ -1,0 +1,31 @@
+{
+  "demo": {
+    "name": "Amethyst Door",
+    "icon": "amethyst-door-justfatlard:amethyst_door",
+    "about": [
+      "A door of six amethyst blocks that opens onto a hollow geode of your own, which nobody else can reach.",
+      "Place the door and right-click it to step into your geode. That ends the demo with your own things back, and the door on the far side takes you home."
+    ]
+  },
+  "pvp_preset": 1,
+  "needs": ["amethyst-door-justfatlard"],
+  "preset": {
+    "name": "Amethyst Door",
+    "icon": "amethyst-door-justfatlard:amethyst_door",
+    "pvp": false,
+    "sealed": false,
+    "game_mode": "survival",
+    "entry_kit": [
+      {"slot": 0, "item": {"id": "amethyst-door-justfatlard:amethyst_door", "count": 1}}
+    ],
+    "respawn_kit": "entry",
+    "goal": "time",
+    "mobs": "off",
+    "life": 15,
+    "size": 2,
+    "world": "overworld",
+    "shape": "natural",
+    "biome": "minecraft:meadow",
+    "weather": "clear"
+  }
+}
