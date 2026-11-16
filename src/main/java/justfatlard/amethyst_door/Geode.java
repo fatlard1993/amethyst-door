@@ -54,14 +54,22 @@ public final class Geode {
 		int reach = Pocket.OUTER_RADIUS + 1;
 		BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
 
+		// A geode further off than this cannot reach any block in this one's box, so it cannot
+		// change what belongs there, and a big cluster is not asked about every block of every geode.
+		double neighbourly = Pocket.OUTER_RADIUS + reach * Math.sqrt(3) + 1;
+
 		for (Pocket.Site site : cluster) {
 			BlockPos centre = site.centre();
+			List<Pocket.Site> near = new java.util.ArrayList<>();
+			for (Pocket.Site other : cluster) {
+				if (other.distance(centre) <= neighbourly) near.add(other);
+			}
 			RandomSource random = RandomSource.create(centre.asLong() * 31L + 17L);
 			for (int x = -reach; x <= reach; x++) {
 				for (int y = -reach; y <= reach; y++) {
 					for (int z = -reach; z <= reach; z++) {
 						at.set(centre.getX() + x, centre.getY() + y, centre.getZ() + z);
-						BlockState want = wanted(cluster, at, random);
+						BlockState want = wanted(near, at, random);
 						if (want == null) continue;
 						BlockState have = level.getBlockState(at);
 						if (want.isAir()) {
